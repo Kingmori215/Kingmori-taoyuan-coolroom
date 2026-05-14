@@ -145,16 +145,17 @@ input {
 const API = "https://script.google.com/macros/s/AKfycbxxyUEbxu5Us4PKli-dfbYzh_Bvbb76V64sutrJr9CWiR8RvljkT9ZWXiX4rlzv4kXr/exec";
 
 
-// 🔥 設備名稱設定
+// 🔥 區域名稱設定
 const deviceNames = {
 
-  "冷凍區":,
-  "冷藏區":,
-  "超低溫冰箱":
+  "冷凍區": "冷凍區",
+  "冷藏區": "冷藏區",
+  "超低溫冰箱": "超低溫冰箱"
+
 };
 
 
-// 🔥 設備清單
+// 🔥 區域清單
 const devices = Object.keys(deviceNames);
 
 let allRows = [];
@@ -183,10 +184,10 @@ async function loadAllDevices(){
         allRows.push(d);
       });
 
-      // 🔥 顯示設備名稱
+      // 🔥 顯示區域名稱
       html += `
         <h3>
-          設備${device} - ${deviceNames[device]}
+          ${deviceNames[device]}
         </h3>
       `;
 
@@ -234,18 +235,26 @@ async function loadAllDevices(){
 
         const temp = parseFloat(d.temp);
 
-        // 冷藏 > 7
+        // 🔥 冷藏區 > 7°C
         if(
-          deviceNames[device].includes("冷藏")
-          && temp > 7
+          device === "冷藏區" &&
+          temp > 7
         ){
           tempClass = "temp-danger";
         }
 
-        // 冷凍 > -18
+        // 🔥 冷凍區 > -18°C
         if(
-          deviceNames[device].includes("冷凍")
-          && temp > -18
+          device === "冷凍區" &&
+          temp > -18
+        ){
+          tempClass = "temp-danger";
+        }
+
+        // 🔥 超低溫冰箱 > -60°C
+        if(
+          device === "超低溫冰箱" &&
+          temp > -60
         ){
           tempClass = "temp-danger";
         }
@@ -288,6 +297,7 @@ async function loadAllDevices(){
         html += `
         <tr class="${rowClass}">
           <td>${d.date}</td>
+
           <td>${t}</td>
 
           <td class="${tempClass}">
@@ -295,7 +305,9 @@ async function loadAllDevices(){
           </td>
 
           <td>${d.name}</td>
+
           <td>${d.remark || ""}</td>
+
           <td>${checkInfo}</td>
         </tr>
         `;
@@ -307,7 +319,7 @@ async function loadAllDevices(){
 
       html += `
         <h3>
-          設備${device} - ${deviceNames[device]}
+          ${deviceNames[device]}
         </h3>
 
         <p>❌ 讀取失敗</p>
