@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>冷凍冷藏溫度複核頁</title>
+
+<style>
+body {
+  font-family: sans-serif;
+  padding:20px;
+  background:#f5f5f5;
+}
+
+.card {
+  background:white;
+  padding:20px;
+  border-radius:12px;
+  margin-bottom:20px;
+}
+
+h2 {
+  margin-top:0;
+}
+
+h3 {
+  margin-top:30px;
+  background:#4CAF50;
+  color:white;
+  padding:10px;
+  border-radius:8px;
+  font-size:18px;
+}
+
+table {
+  width:100%;
+  border-collapse: collapse;
+  margin-top:10px;
+  font-size:14px;
+}
+
+td, th {
+  border:1px solid #ccc;
+  padding:8px;
+  text-align:center;
+}
+
+button {
+  width:100%;
+  padding:14px;
+  margin-top:15px;
+  background:#4CAF50;
+  color:white;
+  border:none;
+  border-radius:8px;
+  font-size:18px;
+  transition:0.2s;
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
+button.loading {
+  background:#999;
+}
+
+button:disabled {
+  opacity:0.6;
+}
+
+.checked {
+  background:#e8f5e9;
+}
+
+.unchecked {
+  background:#fff3e0;
+}
+
+/* 🔥 異常溫度 */
+.temp-danger {
+  color:red;
+  font-weight:bold;
+  font-size:16px;
+}
+
+/* 🔥 載入畫面 */
+.loading-screen {
+  position: fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background:#f5f5f5;
+  font-size:32px;
+  font-weight:bold;
+  z-index:999;
+}
+
+input {
+  width:100%;
+  padding:12px;
+  margin-top:15px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  font-size:16px;
+}
+
+#msg {
+  margin-top:15px;
+  text-align:center;
+  font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<!-- 🔥 載入畫面 -->
+<div id="loading" class="loading-screen">
+  載入中...
+</div>
+
+<div class="card" id="main" style="display:none;">
+
+  <h2>冷凍冷藏溫度複核</h2>
+
+  <div id="tableArea"></div>
+
+  <input id="checker" placeholder="請輸入複核者姓名">
+
+  <button id="btn" onclick="submitCheck()">
+    確認全部複核
+  </button>
+
+  <p id="msg"></p>
+
+</div>
+
+<script>
+
+const API = "https://script.google.com/macros/s/AKfycbzG-rsW9enCg1uOJwCardM9xyUQS2QbIUwEXj4ylV_D-xhKupgSpWmEstwo5lQsUHTBgg/exec";
+
+
+// 🔥 設備名稱設定
+const deviceNames = {
+
+  "1":  "冷藏-咖啡機冰箱",
+  "2":  "冷藏-咖啡機下方",
+  "3":  "冷藏-牛奶冰箱",
+  "4":  "冷藏-小農商品",
+  "5":  "冷凍-前中島(右)",
+  "6":  "冷藏-蔬菜冰箱",
+  "7":  "冷凍-三門直立",
+  "8":  "冷凍-後中島(右)",
+  "9":  "冷藏-料理台下方",
+  "10": "冷藏-後場",
+  "11": "冷凍-後場",
+  "12": "冷凍-後中島(左)",
+  "13": "冷凍-後中島(前)",
+  "14": "冷凍-前中島(左)",
+  "15": "冷凍-前中島(前)"
+};
+
+
+// 🔥 設備清單
+const devices = Object.keys(deviceNames);
+
+let allRows = [];
+
+loadAllDevices();
+
+
+// 🔵 載入全部設備
+async function loadAllDevices(){
+
+  let html = "";
+
+  for(const device of devices){
+
+    try {
+
+      const res = await fetch(
+        API + "?action=get&device=" + encodeURIComponent(device)
+      );
+
+      const data = await res.json();
+
+      // 保存資料供複核使用
+      data.forEach(d => {
+        d.device = device;
+        allRows.push(d);
+      });
+
+      // 🔥 顯示設備名稱
+      html += `
+        <h3>
+          設備${device} - ${deviceNames[device]}
+        </h3>
+      `;
+
+      if(data.length === 0){
+
+        html += `
+          <p style="padding:10px;">
+            ⚠️ 沒有資料
+          </p>
+        `;
+
+        continue;
+      }
+
+      html += `
+      <table>
+        <tr>
+          <th>日期</th>
+          <th>時間</th>
+          <th>溫度</th>
+          <th>人員</th>
+          <th>備註</th>
+          <th>複核</th>
+        </tr>
+      `;
+
+      data.forEach(d => {
+
+        // 🔥 時間格式
+        let t = "";
+
+        if(d.time){
+
+          let time = new Date(d.time);
+
+          t =
+            time.getHours().toString().padStart(2,'0')
+            + ":" +
+            time.getMinutes().toString().padStart(2,'0');
+        }
+
+        // 🔥 溫度異常判斷
+        let tempClass = "";
+        let tempValue = d.temp;
+
+        const temp = parseFloat(d.temp);
+
+        // 冷藏 > 7
+        if(
+          deviceNames[device].includes("冷藏")
+          && temp > 7
+        ){
+          tempClass = "temp-danger";
+        }
+
+        // 冷凍 > -18
+        if(
+          deviceNames[device].includes("冷凍")
+          && temp > -18
+        ){
+          tempClass = "temp-danger";
+        }
+
+        // 🔥 複核資訊
+        let checkInfo = "未複核";
+        let rowClass = "unchecked";
+
+        if(d.checker){
+
+          let dateStr = "";
+          let timeStr = "";
+
+          if(d.checkDate){
+
+            let cd = new Date(d.checkDate);
+
+            dateStr =
+              cd.getFullYear() + "/" +
+              (cd.getMonth()+1).toString().padStart(2,'0') + "/" +
+              cd.getDate().toString().padStart(2,'0');
+          }
+
+          if(d.checkTime){
+
+            let ct = new Date(d.checkTime);
+
+            timeStr =
+              ct.getHours().toString().padStart(2,'0')
+              + ":" +
+              ct.getMinutes().toString().padStart(2,'0');
+          }
+
+          checkInfo =
+            `${d.checker}<br>${dateStr} ${timeStr}`;
+
+          rowClass = "checked";
+        }
+
+        html += `
+        <tr class="${rowClass}">
+          <td>${d.date}</td>
+          <td>${t}</td>
+
+          <td class="${tempClass}">
+            ${tempValue}°C
+          </td>
+
+          <td>${d.name}</td>
+          <td>${d.remark || ""}</td>
+          <td>${checkInfo}</td>
+        </tr>
+        `;
+      });
+
+      html += "</table>";
+
+    } catch(e){
+
+      html += `
+        <h3>
+          設備${device} - ${deviceNames[device]}
+        </h3>
+
+        <p>❌ 讀取失敗</p>
+      `;
+    }
+  }
+
+  document.getElementById("tableArea").innerHTML = html;
+
+  // 🔥 顯示主畫面
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("main").style.display = "block";
+}
+
+
+// 🔥 全部複核
+async function submitCheck(){
+
+  const btn = document.getElementById("btn");
+  const checker = document.getElementById("checker").value.trim();
+
+  if(!checker){
+    alert("請輸入複核者姓名");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.classList.add("loading");
+  btn.innerText = "送出中...";
+
+  try {
+
+    for(const r of allRows){
+
+      // 只複核未複核資料
+      if(!r.checker){
+
+        await fetch(API, {
+          method: "POST",
+          body: new URLSearchParams({
+            action: "check",
+            device: r.device,
+            row: r.row,
+            checker: checker
+          })
+        });
+      }
+    }
+
+    // 🔥 完成畫面
+    document.body.innerHTML = `
+      <div style="
+        display:flex;
+        justify-content:center;
+        align-items:center;
+        height:100vh;
+        flex-direction:column;
+        font-family:sans-serif;
+      ">
+        <h1>✅ 全部設備複核完成</h1>
+        <p>可直接關閉此頁面</p>
+      </div>
+    `;
+
+  } catch(e){
+
+    alert("複核失敗");
+
+    btn.disabled = false;
+    btn.classList.remove("loading");
+    btn.innerText = "確認全部複核";
+  }
+}
+
+</script>
+
+</body>
+</html>
